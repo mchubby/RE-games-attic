@@ -1,0 +1,14 @@
+comtype lzss "12 4 2 2 0"
+
+#idstring "\x40\x00\x0C\x00" # filetype ?
+# prs usually give either a .tm2 or a .tex file
+get value1 long
+get value2 long
+
+get ZSIZE ASIZE
+math ZSIZE -= 4
+
+get NAME filename
+string NAME += ".unpacked"
+
+clog NAME 4 ZSIZE 10000000

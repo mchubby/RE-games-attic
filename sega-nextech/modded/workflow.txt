@@ -1,0 +1,5 @@
+1/ re-create a new file, e.g. PACKTOWN02.RAX
+2/ insert file into ST.cvm.iso using ultraiso, save as ST-mod.iso
+3/ create ST.CVM: cvm_tool.exe mkcvm modded/ST.CVM modded/ST-mod.ISO ST.hdr
+4/ insert ST.CVM into game iso using ultraiso; save as result.iso and use in emulator
+

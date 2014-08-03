@@ -1,0 +1,9 @@
+[01 00 00 00] [01 00 00 00]		1:#Palettes 2:#Palettes2 one palette every ??? blocks 
+[00 02] [10 01] [E0 01] [10 01]		1:? 2? 3:Width(#columns) 4:Height(#Rows) 1>=3 2>=4
+
+[00 00 00 00] [00 00 00 00]		?ViewPort
+[DF 01 00 00] [0F 01 00 00]		1:(Width-1) 2:(Height-1)
+
+Palette definition:
+01 00 03 03 [00 02] [10 01]
+[10 00 00 00] [10 04 00 00]		1:PaletteInfo?HeaderLength,bpp? 2:PaletteInfo?Length

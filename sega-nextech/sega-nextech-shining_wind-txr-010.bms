@@ -1,0 +1,97 @@
+# Extractor for SEGA/Nextech *.TXR (script 0.1.0)
+# = used in shining tears & shining wind
+# script for QuickBMS http://quickbms.aluigi.org
+
+endian little
+get myext EXTENSION
+if myext != "TXR"
+    print "Please run this script on a .TXR file"
+    cleanexit
+endif
+
+get DAT_SIZE asize
+
+# A .txr file typically contains a single bitmap, but there are some edge cases
+math i = 0
+
+for OFFSET = 0 < DAT_SIZE
+    idstring "TXR\x00"
+
+    math i += 1
+    
+    get query->bm_type long
+    get query->bm_widt short
+    get query->bm_heig short
+    get RESERVED_ long # always zero?
+
+    callfunction query2tga
+    cleanexit
+
+    savepos OFFSET
+next
+
+###############################################
+# struct TGAHeader
+# {
+#   uint8   idLength,           // Length of optional identification sequence.
+#           paletteType,        // Is a palette present? (1=yes)
+#           imageType;          // Image data type (0=none, 1=indexed, 2=rgb,
+#                               // 3=grey, +8=rle packed).
+#   uint16  firstPaletteEntry,  // First palette index, if present.
+#           numPaletteEntries;  // Number of palette entries, if present.
+#   uint8   paletteBits;        // Number of bits per palette entry.
+#   uint16  x,                  // Horiz. pixel coord. of lower left of image.
+#           y,                  // Vert. pixel coord. of lower left of image.
+#           width,              // Image width in pixels.
+#           height;             // Image height in pixels.
+#   uint8   depth,              // Image color depth (bits per pixel).
+#           descriptor;         // Image attribute flags.
+# };
+startfunction query2tga
+
+    savepos DATOFFSET
+
+    if query->bm_type == 0
+        # 32bpp RGBa
+        math query->bm_bpp = 32
+        math query->bm_pal = 0
+        set MEMORY_FILE binary "\x00\x00\x02\x00\x00\x00\x00\x00\x00\x00\x00\x00\xAA\xAA\xBB\xBB\x20\x28"
+    elif query->bm_type == 0x13
+        # indexed 8bpp RGBa with 256-entry RGBa palette (0x400 bytes)
+        math query->bm_bpp = 8
+        math query->bm_pal = 0x400
+        set MEMORY_FILE binary "\x00\x01\x01\x00\x00\x00\x01\x20\x00\x00\x00\x00\xAA\xAA\xBB\xBB\x08\x28"
+#    elif query->bm_type == 0x14
+        # 5bpp
+    else
+        print "unknown bitmap type in TXR file %query->bm_type% starting @ offset %OFFSET%"
+        cleanexit
+    endif
+
+    goto 0x0C MEMORY_FILE   # x,y
+    put query->bm_widt short MEMORY_FILE
+    put query->bm_heig short MEMORY_FILE
+    get TGAHDSIZE asize MEMORY_FILE
+
+    math PXBITMAP = query->bm_widt
+    math PXBITMAP *= query->bm_heig
+    math BYT = query->bm_bpp
+    math BYT u/= 8
+    math PXBITMAP *= BYT
+
+    get NAME basename
+    string NAME p= "%s_%03d.tga" NAME i
+append
+    log MEMORY_FILE2 0 TGAHDSIZE MEMORY_FILE
+    if query->bm_pal > 0
+        math PALOFFSET = DATOFFSET
+        math PALOFFSET += PXBITMAP  # TXR puts image data first, then colormap
+        log MEMORY_FILE2 PALOFFSET query->bm_pal
+    endif
+
+    log MEMORY_FILE2 DATOFFSET PXBITMAP
+append
+    get TGATOTSIZE asize MEMORY_FILE2
+    log NAME 0 TGATOTSIZE MEMORY_FILE2
+
+endfunction

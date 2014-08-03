@@ -1,0 +1,74 @@
+# Dumper for SEGA/Nextech *.RAX (script 0.1.0)
+# = used in shining tears & shining wind
+# script for QuickBMS http://quickbms.aluigi.org
+
+# This version only dumps LZSS segments as-is
+
+endian little
+get myname FILENAME
+get myext EXTENSION
+if myext != "RAX"
+    print "Please run this script on a .RAX file"
+    cleanexit
+endif
+
+get DAT_SIZE asize
+idstring "RAX\x00"
+get rax->RESERVED1_ long
+get rax->RESERVED2_ long
+get rax->entcount long
+
+math i = 0
+
+for OFFSET = 0x10 < DAT_SIZE
+    getdstring query->sig 4
+    get        query->blksize long
+    get        query->fnamelen long
+    get        query->usize long
+
+    math i += 1
+
+    if query->fnamelen > 0x100
+        print "(%myname% at OFFSET=%OFFSET%) entry filename overly long, maybe bad value [query->fnamelen=%query->fnamelen%]"
+        cleanexit
+    endif
+    if query->fnamelen > 0
+        getdstring query->fname query->fnamelen
+    else
+        string query->fname p= "--%03d--.bin" i
+    endif
+
+    set        query->zsize query->blksize
+    math query->zsize -= 0x10
+    math query->zsize -= query->fnamelen
+
+    savepos tmpOFFSET
+    get magic long
+    goto tmpOFFSET
+    
+    string dumpext = ".slz"
+    if magic u!= 0x53535A4C # LZSS
+        string dumpext = ".raw"
+    endif
+
+    set fname query->fname
+    string fname R= "/" "!"
+    string fname R= "\\" "!"
+
+    get NAME basename
+    string NAME p= "%s# [%s]%s" NAME fname dumpext
+    
+    if magic u== 0x53535A4C # LZSS
+        log NAME tmpOFFSET query->zsize
+    else
+        log NAME tmpOFFSET query->usize
+    endif
+
+    goto query->zsize 0 SEEK_CUR
+
+    savepos OFFSET
+next
+
+if i != rax->entcount
+    print "(%myname%) Expected %rax->entcount% entries, found %i%"
+endif

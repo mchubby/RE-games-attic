@@ -1,0 +1,33 @@
+endian little
+get myext EXTENSION
+if myext == "BIN"
+    print "Please run this script on the .TAG file"
+    cleanexit
+endif
+
+idstring "****TAG_DATA****"
+open FDDE BIN 1
+
+# read 0x100 entries, 8 bytes each
+for query->index = 0 < 256
+    get query->blocks long
+    get query->offset long
+    
+    set query->totalsize long query->blocks
+    math query->totalsize *= 0x20
+    
+    #get NAME basename
+    #string NAME p= "%s_%03d.lst" NAME query->index
+    #log NAME query->offset query->totalsize
+    log MEMORY_FILE query->offset query->totalsize
+
+    for i = 0 < query->blocks
+        getdstring entry->filename 16 MEMORY_FILE
+        get entry->unknown1 long MEMORY_FILE
+        get entry->offset long MEMORY_FILE
+        get entry->size long MEMORY_FILE
+        get entry->reservesz long MEMORY_FILE
+        log entry->filename entry->offset entry->size 1
+    next i
+
+next query->index

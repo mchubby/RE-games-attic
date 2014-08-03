@@ -1,0 +1,225 @@
+﻿
+The Entis GLS .csx format - Revision 0, maintainer: Waku_Waku
+Reverse-engineered by ---
+
+All fields are little-endian unless specified otherwise.
+
+ Foreword: Introduction to Entis GLS
+=====================================
+Entis Generalized Library Set (GLS) is a shareware middleware framework published by Leshade Entis,
+and provides a set of interfaces and tools relying on Win32 and DirectX API calls, while exposing
+a simpler interface. This allows to easily process assets for use in game engines, for instance.
+Its website is hosted at Entis Laboratory:
+ http://www.entis.jp/gls/
+
+It encompasses several bricks, or 'layers':
+- Entis Standard Library (ESL): defines a set of foundations classes handling several basic I/O and
+  general-purpose functions.
+- Entis Rasterized Image Superior Architecture (ERISA): handles multimedia file formats, notably
+  .eri (bitmap image) and .mio (waveform sound). x86-optimized.
+- Entis Graphic Library (EGL): handles 2D and 3D graphics rendering and transforms.
+- GLS: ancillary functions, including the scripting engine
+
+This game development framework ships with its own scripting language, Entis CotophaScript.
+According to the reference guide, Cotopha stands for "Common Token Phantasy".
+
+On the website, the downloads section offers an SDK archive containing tools for processing scripts.
+As of the time of this writing, its name is "cotopha308f.lzh" (dated 2007/12/14). It also contains
+an exhaustive reference manual which indicates what the script language is capable of.
+
+Cotopha scripts (*.cos) are preprocessed, compiled, and linked using these tools.
+This ecosystem translates scripts, which contain human-readable instructions, into machine-readable,
+binary data. In many ways, it acts very much like how a C source code file is turned into an executable.
+
+
+ I) About CotophaScript Executable image
+=========================================
+The result of compiling a plain text CotophaScript is a "CotophaScript Executable image" (*.csx).
+Although it would technically be possible to compile plain script files (*.cos) at runtime, I have yet to
+encounter those in commercial games; most of the time you will find them compiled form (*.csx),
+along with other game assets.
+
+.csx is a binary format. It is expected to be read and loaded into a Cotopha execution environment,
+a virtual machine embedded into the game program.
+The principle of the Cotopha VM is to be able to save and restore game state in a simple fashion,
+that is to say flag variables, game progress, display status, etc. It was tailored for AVG-type games.
+
+The Entis Laboratory website offers the Entis GLS SDK for download, "gls309a.lzh", which includes
+insight into how these images look like. The relevant document here is "COTOPHA-func.doc".
+It has a section of utmost interest titled "Cotopha Instruction Encoding" (詞葉命令エンコーディング).
+
+Since we are looking for localizable items, we should look at how messages end up being displayed
+on the game screen.
+
+
+ I.1)  Basic types
+-------------------
+
+In CotophaScript, string literals are always 16-bit encoded Unicode, and we can safely assume it
+to be UCS-2 Little Endian. Such literals are encoded as following:
+
+	Format - String Literal
+	#######################
+	4 bytes - string length, in characters
+  n*2 bytes - string data
+
+Executable images may also contain a 'conststr' string section, which defines an array of string values.
+It is possible to refer to these strings using a special size for string length:
+	Format - String Reference
+	#########################
+	4 bytes - string special length = 0x80000000 (0x00 0x00 0x00 0x80)
+  4 bytes - string index
+
+
+CotophaScript allows defining variables with various types. These variables may end up in the
+signature of functions, therefore it will be good to know a few basics about them.
+
+	Table I.1.1 - CSVariableType values
+	###################################
+
+  numeric value | symbol
+  --------------+--------------------------
+	0             | csvtObject
+	1             | csvtReference
+	2             | csvtArray
+	3             | csvtHash
+	4             | csvtInteger
+	5             | csvtReal
+	6             | csvtString
+	7             | csvtInteger64
+	8             | csvtMax
+	-1            | csvtInvalid
+
+  
+ I.2)  Instruction Encoding
+----------------------------
+
+CotophaScript defines possible values for instruction tokens in glsscript.h.
+These are listed in Table I.2.1.
+
+	Table I.2.1 - CSInstructionCode values
+	######################################
+
+  numeric value | symbol
+  --------------+--------------------------
+	0             | csicNew
+	1             | csicFree
+	2             | csicLoad
+	3             | csicStore
+	4             | csicEnter
+	5             | csicLeave
+	6             | csicJump
+	7             | csicCJump
+	8             | csicCall
+	9             | csicReturn
+	10            | csicElement
+	11            | csicElementIndirect
+	12            | csicOperate
+	13            | csicUniOperate
+	14            | csicCompare
+	15            | csicMax
+
+Text output is often handled by a custom function, because it's such a common task.
+It varies depending on game software vendor. For instance, CUFF/CUBE/SPHERE use
+  Talk(String voice, String name)
+  TalkAdd(String voice, String name)
+  Mess(String mess)
+where voice (resource identifier) is blank when the protagonist speaks.
+  
+  
+A function body is defined using the opcode 0x04.
+  csicEnter = DEFINE_FUNCTION_BEGIN [known as "Create Namespace (function local area)"]
+  {
+    1 byte - instruction code = csicEnter (0x04)
+    4+x bytes - string literal: function name
+    4 bytes - argument count
+    n times [
+      1 byte - variable type (see Table I.1.1)
+      4+x bytes - string literal: argument name
+    ]
+  }
+
+The CotophaScript bytecode is designed is such a way that arguments to functions are transmitted via
+a call stack. Arguments are "pushed" using opcode 0x02, then the function is called with opcode 0x08.
+Arguments are pushed from the rightmost to the leftmost.
+  csicLoad = PUSH_ARG_ON_STACK [known as "Load"]
+  {
+    1 byte - instruction code = csicLoad (0x02)
+    1 byte - argument storage mode: irrelevant, leave as is
+    1 byte - argument type - see Table I.1.1
+    then, depending on argument type,
+    {
+      //csvtInteger = 0x04
+      4 bytes - argument value
+    }
+    {
+      //csvtString = 0x06
+      4+x bytes - string literal: argument value
+    }
+  }
+
+Calling a function is a 0x08 opcode.
+  csicCall = CALL [known as "Function Call"]
+  {
+    1 byte - instruction code = csicCall (0x08)
+    1 byte - function call convention: irrelevant, leave as is
+    4 bytes - argument count
+    4+x bytes - string literal: function name (some images use exclusively conststr refs)
+  }
+  csicFree = CALL_STACKCLEANUP [known as "Stack Release"]
+  {
+    1 byte - instruction code = csicFree (0x08)
+  }
+
+
+ II) .csx Header (0x60 bytes)
+==============================
+We have seen how translatable strings might be expressed in the bytecode. As already said, how they appear
+is vendor-specific. Let us see how the executable image is structured, so we can reimage it after
+performing modifications.
+
+	8 bytes - 'Entis...' signature (0x45 0x6E 0x74 0x69 0x73 0x1A 0x00 0x00)
+  4 bytes - unknown, 0xFFFFFFFF
+  4 bytes - unknown, must be 0x00000000
+  40 bytes - Entis Standard Library class name, zero right-padded. Is always
+'Cotopha Image file' (0x43 0x6F 0x74 0x6F 0x70 0x68 0x61 0x20 0x49 0x6D 0x61 0x67 0x65 0x20 0x66 0x69 0x6C 0x65)
+followed by twenty-two \x00 bytes
+  4 bytes - executable image datastream length, excluding this header
+	4 bytes - reserved. Always zero for future compatibility
+
+
+ III) .csx sections
+====================
+The executable image consists of several sections. Each one has a specific identifier ("tag"), appears
+once and is not aligned on a specific boundary.
+
+Ordering:
+ image
+ function
+ global
+ data
+ conststr (* not present in older versions of the SDK)
+ linkinf
+
+The generic structure for a section header goes like this:
+  8 bytes - section name, right-padded with 0x20 bytes if shorter than 8 characters
+  4 bytes - section datastream length, excluding this header
+  4 bytes - reserved. Always zero for future compatibility
+
+
+ III.1)  image section
+-----------------------
+The eight-byte section name field contains the values
+	'image   ' (0x69 0x6D 0x61 0x67 0x65 0x20 0x20 0x20}
+
+This section contains executable bytecode.
+If the CotophaScript source (*.cos) has actual code (not definitions) at the global scope,
+compiled instructions are placed in a special function "@Initialize" which is called at the very
+beginning. Then if a main() function is defined, it is called afterwards.
+
+What you will find most of the time in game script images, however, is a stub @Initialize() with
+no code inside (csicEnter followed by csicReturn).
+
+
+We have seen how functions are initiated in section I.2) Instruction Encoding.
+
