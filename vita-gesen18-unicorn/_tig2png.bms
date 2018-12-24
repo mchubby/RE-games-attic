@@ -1,0 +1,65 @@
+# Runs XOR obfuscation algo through a Tig bytestream
+# script for QuickBMS http://quickbms.aluigi.org
+#
+# Usage:
+#   quickbms.exe tig2png.bms file.tig .
+#   quickbms.exe png2tig.bms file.png .
+# will overwrite target converted extension depending on input
+
+set SEED 0x7F7F7F7F
+
+get EXT extension
+set OUTEXT "png"
+
+# tig2png: substract
+set OPERATION -1
+
+if EXT != "tig"
+    String OUTEXT = "tig"
+    # png2tig: substract
+    math OPERATION = 1
+endif
+
+get NAME basename
+String NAME += "."
+String NAME += OUTEXT
+get SIZE asize
+
+log MEMORY_FILE 0 SIZE
+
+for i = 0 < SIZE
+    getvarchr MYCHAR MEMORY_FILE i
+    
+    math TMP u= SEED
+    math TMP u*= 0x000343FD
+    math TMP u+= 0x00269EC3
+    math SEED u= TMP
+
+    #string dmpval p= "dmpval = %08X" SEED
+    #print "%dmpval%"
+    #cleanexit
+    
+    math TMPHIGH u= SEED
+    math TMPHIGH u>>= 16
+    math TMPHIGH u&= 0xFF
+
+    #string dmpval p= "dmpval = %08X" TMPHIGH
+    #print "%dmpval%"
+    #cleanexit
+    
+    math RESULTCHAR u= MYCHAR
+    if OPERATION < 0
+        math RESULTCHAR u-= TMPHIGH
+    else
+        math RESULTCHAR u+= TMPHIGH
+    endif
+    math RESULTCHAR u&= 0xFF
+
+    #string dmpval p= "dmpval = %08X" RESULTCHAR
+    #print "%dmpval%"
+    #cleanexit
+
+    putvarchr MEMORY_FILE i RESULTCHAR
+next i
+
+log NAME 0 SIZE MEMORY_FILE

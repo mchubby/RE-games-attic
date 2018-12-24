@@ -1,0 +1,17 @@
+# Sengoku Hime 3 (gesen18), .vpk, PS Vita
+# script for QuickBMS http://quickbms.aluigi.org
+
+get EXT extension
+If EXT != "vpk"
+    CleanExit
+EndIf
+
+get FILES long
+for i = 0 < FILES
+    get OFFSET long
+    get SIZE long
+    getdstring NAME 0x40
+    If SIZE > 0
+        log NAME OFFSET SIZE
+    EndIf
+next i
